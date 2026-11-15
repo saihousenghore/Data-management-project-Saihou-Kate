@@ -1,0 +1,235 @@
+
+---
+title: "Credit Expansion and the subprime crises"
+author: "Saihou"
+format: html
+---
+
+```{r}
+#| echo: true
+
+here::i_am("Data-management-project-Saihou-kate.Rproj")
+
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+
+# Import datasets
+credit <- read.csv(
+  "bis_dp_custom_table_export_20261114-214619.csv",
+  skip = 3
+)
+
+gdp <- read.csv(
+  "GDP (constant_ 2015 _US$).csv",
+  skip = 4
+)
+
+CPI <- read.csv(
+  "Consumer price index (2010 = 100).csv",
+  skip = 4
+)
+
+GDP_Growth <- read.csv(
+  "GDP growth (annual %).csv",
+  skip = 4
+)
+
+Trade_Openness <- read.csv(
+  "Trade-Percentage-GDP.csv",
+  skip = 4
+)
+
+Unemployment_rate <- read.csv(
+  "Unemployment, total (% of total labor force) (modeled ILO estimate).csv",
+  skip = 4
+)
+```
+
+## Transform GDP data
+
+```{r}
+gdp_long <- gdp |>
+  pivot_longer(
+    cols = starts_with("X"),
+    names_to = "Year",
+    values_to = "GDP"
+  ) |>
+  mutate(Year = as.integer(sub("^X", "", Year)))
+```
+
+## Transform CPI data
+
+```{r}
+CPI_long <- CPI |>
+  pivot_longer(
+    cols = starts_with("X"),
+    names_to = "Year",
+    values_to = "CPI"
+  ) |>
+  mutate(Year = as.integer(sub("^X", "", Year)))
+```
+
+## Transform GDP_growth data
+
+```{r}
+gdp_Growth_long <- GDP_Growth |>
+  pivot_longer(
+    cols = starts_with("X"),
+    names_to = "Year",
+    values_to = "GDP_Growth"
+  ) |>
+  mutate(Year = as.integer(sub("^X", "", Year)))
+```
+
+## Transform Trade Openness data
+
+```{r}
+Trade_Openness_long <- gdp |>
+  pivot_longer(
+    cols = starts_with("X"),
+    names_to = "Year",
+    values_to = "Trade_Openness"
+  ) |>
+  mutate(Year = as.integer(sub("^X", "", Year)))
+```
+
+## Transform credit data
+
+```{r}
+credit_long <- credit |>
+  pivot_longer(
+    cols = starts_with("X"),
+    names_to = "Year",
+    values_to = "debt_GDP_ratio"
+  ) |>
+  mutate(Year = sub("^X", "", Year))
+```
+
+## Transform Umemployment data
+
+```{r}
+Unemployment_long <- Unemployment_rate |>
+  pivot_longer(
+    cols = starts_with("X"),
+    names_to = "Year",
+    values_to = "Umemployment_rate"
+  ) |>
+  mutate(Year = sub("^X", "", Year))
+```
+
+## Calculate annual average credit-to-GDP ratio from quarterly data
+
+```{r}
+library(lubridate)
+
+credit_annual <- credit_long |>
+  mutate(Year = year(as.Date(Year, format = "%Y.%m.%d"))) |>
+  group_by(Borrowers..country, Year) |>
+  summarise(
+    debt_GDP_ratio = mean(debt_GDP_ratio, na.rm = TRUE),
+    .groups = "drop"
+  )
+```
+
+
+## Rename country column
+```{r}
+credit_annual<-credit_annual |> 
+  rename(Country.Name= Borrowers..country)
+```
+
+
+## conver Years into intergers
+```{r}
+gdp_long <- gdp_long |>
+  mutate(Year = as.integer(Year))
+
+gdp_Growth_long <- gdp_Growth_long |>
+  mutate(Year = as.integer(Year))
+
+Trade_Openness_long <- Trade_Openness_long |>
+  mutate(Year = as.integer(Year))
+
+Unemployment_long <- Unemployment_long |>
+  mutate(Year = as.integer(Year))
+
+CPI_long <- CPI_long |>
+  mutate(Year = as.integer(Year))
+```
+
+
+
+## Merge GDP and credit data
+
+```{r}
+Merged_data <- credit_annual |>
+  inner_join(
+    gdp_long |> select(Country.Name, Year, GDP),
+    by = c("Country.Name", "Year")
+  ) |>
+  inner_join(
+    gdp_Growth_long |> select(Country.Name, Year, GDP_Growth),
+    by = c("Country.Name", "Year")
+  ) |>
+  inner_join(
+    Trade_Openness_long |> select(Country.Name, Year, Trade_Openness),
+    by = c("Country.Name", "Year")
+  ) |>
+  inner_join(
+    Unemployment_long |> select(Country.Name, Year, Umemployment_rate),
+    by = c("Country.Name", "Year")
+  ) |>
+  inner_join(
+    CPI_long |> select(Country.Name, Year, CPI),
+    by = c("Country.Name", "Year")
+  )
+```
+
+##  merged dataset Inspection
+
+```{r}
+nrow(Merged_data)
+str(Merged_data)
+summary(Merged_data)
+colSums(is.na(Merged_data))
+sum(is.na(gdp_long$GDP))
+
+n_distinct(Merged_data$Country.Name)
+```
+
+
+### test correlation 
+
+```{r}
+Merged_data |>
+  filter(Year == 2011) |>
+  summarise(
+    correlation = cor(GDP_Growth,
+      debt_GDP_ratio,
+      use = "complete.obs"
+    )
+  )
+```
+
+
+```{r}
+Cor_table<-Merged_data |> 
+  filter(Year %in% 2000:2015) |>
+  group_by(Year) |> 
+  summarise(correlation = cor(GDP_Growth,debt_GDP_ratio, use = "complete.obs"))
+
+Cor_table
+
+```
+
+### Correlation graph
+```{r}
+Merged_data |> 
+  filter(Year == 2011) |> 
+  ggplot(aes(x=GDP_Growth, y = debt_GDP_ratio))+
+  geom_point()+
+  geom_smooth(method = "lm", se = FALSE)
+
+```
+
