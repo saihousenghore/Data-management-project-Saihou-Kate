@@ -16,9 +16,11 @@ library(ggplot2)
 
 # Import datasets
 credit <- read.csv(
-  "bis_dp_custom_table_export_20261114-214619.csv",
+  "Total credit to the non-financial sector.csv",
   skip = 3
 )
+credit_HH<-read.csv("Total credit to households.csv",
+                    skip= 3)
 
 gdp <- read.csv(
   "GDP (constant_ 2015 _US$).csv",
@@ -108,6 +110,18 @@ credit_long <- credit |>
   mutate(Year = sub("^X", "", Year))
 ```
 
+## Transform credit_HH data
+
+```{r}
+credit_HH_long <- credit_HH |>
+  pivot_longer(
+    cols = starts_with("X"),
+    names_to = "Year",
+    values_to = "debt_GDP_ratio_HH"
+  ) |>
+  mutate(Year = sub("^X", "", Year))
+```
+
 ## Transform Umemployment data
 
 ```{r}
@@ -132,12 +146,24 @@ credit_annual <- credit_long |>
     debt_GDP_ratio = mean(debt_GDP_ratio, na.rm = TRUE),
     .groups = "drop"
   )
+
+credit_HH_annual <- credit_HH_long |>
+  mutate(Year = year(as.Date(Year, format = "%Y.%m.%d"))) |>
+  group_by(Borrowers..country, Year) |>
+  summarise(
+    debt_GDP_ratio_HH = mean(debt_GDP_ratio_HH, na.rm = TRUE),
+    .groups = "drop"
+  )
+
 ```
 
 
 ## Rename country column
 ```{r}
 credit_annual<-credit_annual |> 
+  rename(Country.Name= Borrowers..country)
+
+credit_HH_annual<-credit_HH_annual |> 
   rename(Country.Name= Borrowers..country)
 ```
 
@@ -168,6 +194,9 @@ CPI_long <- CPI_long |>
 Merged_data <- credit_annual |>
   inner_join(
     gdp_long |> select(Country.Name, Year, GDP),
+    by = c("Country.Name", "Year")
+  ) |>
+  inner_join(credit_HH_annual |> select(Country.Name, Year, debt_GDP_ratio_HH),
     by = c("Country.Name", "Year")
   ) |>
   inner_join(
@@ -212,6 +241,16 @@ Merged_data |>
       use = "complete.obs"
     )
   )
+
+Merged_data |>
+  filter(Year == 2011) |>
+  summarise(
+    correlation = cor(GDP_Growth,
+      debt_GDP_ratio_HH,
+      use = "complete.obs"
+    )
+  )
+
 ```
 
 
@@ -225,6 +264,20 @@ Cor_table
 
 ```
 
+## household debt correlation to gdp growth
+```{r}
+Cor_table<-Merged_data |> 
+  filter(Year %in% 2000:2015) |>
+  group_by(Year) |> 
+  summarise(correlation_HH = cor(GDP_Growth,debt_GDP_ratio_HH, use = "complete.obs"),
+            correlation_non_private_sec = cor(GDP_Growth,debt_GDP_ratio, use = "complete.obs"))
+
+Cor_table
+
+```
+
+
+
 ### Correlation graph
 ```{r}
 Merged_data |> 
@@ -233,5 +286,21 @@ Merged_data |>
   geom_point()+
   geom_smooth(method = "lm", se = FALSE)
 
+Merged_data |> 
+  filter(Year == 2009) |> 
+  ggplot(aes(x=GDP_Growth, y = debt_GDP_ratio_HH))+
+  geom_point()+
+  geom_smooth(method = "lm", se = FALSE)
+
+```
+
+
+##  Evolution of household debt from 2000 to 2015
+```{r}
+Merged_data |> 
+  filter(Year %in% 2000:2015, Country.Name %in% c("France","Germany","United States", "Spain")) |> 
+  ggplot(aes(x=Year,y= debt_GDP_ratio_HH, colour = Country.Name))+
+  geom_line()+
+  scale_x_continuous(breaks = seq(2000,2015, by=1))
 ```
 
