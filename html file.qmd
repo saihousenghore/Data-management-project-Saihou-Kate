@@ -6,7 +6,7 @@ format: html
 ---
 
 ```{r}
-#| echo: true
+#| echo: false
 
 here::i_am("Data-management-project-Saihou-kate.Rproj")
 
@@ -49,6 +49,8 @@ Unemployment_rate <- read.csv(
 ## Transform GDP data
 
 ```{r}
+#| echo: false
+
 gdp_long <- gdp |>
   pivot_longer(
     cols = starts_with("X"),
