@@ -1,7 +1,7 @@
 
 ---
 title: "Credit Expansion and the subprime crises"
-author: "Saihou Senghore - Kate Van Keulen"
+author: "Saihou Senghore - Kate van Keulen"
 format: html
 ---
 
@@ -47,6 +47,46 @@ Unemployment_rate <- read.csv(
   skip = 4
 )
 ```
+
+## Initial dataset inspection
+```{r}
+
+# storing unedited datasets in list
+datasets <- list(
+  "Total credit to non-financial sector" = credit,
+  "Total credit to households" = credit_HH,
+  "GDP" = gdp,
+  "Consumer Price Index" = CPI,
+  "GDP Growth" = GDP_Growth,
+  "Trade Openness" = Trade_Openness,
+  "Unemployment Rate" = Unemployment_rate
+)
+
+# description for each dataset
+for (dataset_name in names(datasets)) {
+  dataset <- datasets[[dataset_name]]
+  cat("\n\n###", dataset_name, "\n\n")
+  
+  # dataset dimensions
+  cat("Number of rows:", nrow(dataset), "\n\n")
+  cat("Number of columns:", ncol(dataset), "\n\n")
+  
+  # variable names and data types
+  variable_info <- data.frame(
+    Variable = names(dataset),
+    Data_Type = sapply(dataset, function(x) class(x)[1]),
+    Missing_Values = sapply(dataset, function(x) sum(is.na(x)))
+  )
+  # print output
+  print(
+    knitr::kable(
+      variable_info,
+      caption = paste("Variables and data types:", dataset_name)
+    )
+  )
+}
+```
+
 
 ## Transform GDP data
 
@@ -168,7 +208,7 @@ credit_HH_annual<-credit_HH_annual |>
 ```
 
 
-## conver Years into intergers
+## convert Years into integers
 ```{r}
 gdp_long <- gdp_long |>
   mutate(Year = as.integer(Year))
