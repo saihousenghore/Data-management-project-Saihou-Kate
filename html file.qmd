@@ -163,7 +163,6 @@ credit_HH_long <- credit_HH |>
 ```
 
 ## Transform Umemployment data
-
 ```{r}
 Unemployment_long <- Unemployment_rate |>
   pivot_longer(
@@ -174,26 +173,21 @@ Unemployment_long <- Unemployment_rate |>
   mutate(Year = sub("^X", "", Year))
 ```
 
-## Calculate annual average credit-to-GDP ratio from quarterly data
-
+## selecting last-quarter entries for (household) credit data from BIS dataset
 ```{r}
 library(lubridate)
 
-credit_annual <- credit_long |>
-  mutate(Year = year(as.Date(Year, format = "%Y.%m.%d"))) |>
-  group_by(Borrowers..country, Year) |>
-  summarise(
-    debt_GDP_ratio = mean(debt_GDP_ratio, na.rm = TRUE),
-    .groups = "drop"
-  )
+credit_annual <- credit_long %>% 
+  mutate(Date = as.Date(Year, format = "%Y.%m.%d")) %>% 
+  filter(quarter(Date) == 4) %>% 
+           mutate(Year = year(Date)) %>% 
+  select(-Date)
 
-credit_HH_annual <- credit_HH_long |>
-  mutate(Year = year(as.Date(Year, format = "%Y.%m.%d"))) |>
-  group_by(Borrowers..country, Year) |>
-  summarise(
-    debt_GDP_ratio_HH = mean(debt_GDP_ratio_HH, na.rm = TRUE),
-    .groups = "drop"
-  )
+credit_HH_annual <- credit_HH_long %>% 
+  mutate(Date = as.Date(Year, format = "%Y.%m.%d")) %>% 
+  filter(quarter(Date) == 4) %>% 
+           mutate(Year = year(Date)) %>% 
+  select(-Date)
 
 ```
 
