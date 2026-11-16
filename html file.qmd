@@ -50,7 +50,6 @@ Unemployment_rate <- read.csv(
 
 ## Initial dataset inspection
 ```{r}
-
 # storing unedited datasets in list
 datasets <- list(
   "Total credit to non-financial sector" = credit,
@@ -63,27 +62,22 @@ datasets <- list(
 )
 
 # description for each dataset
-for (dataset_name in names(datasets)) {
-  dataset <- datasets[[dataset_name]]
-  cat("\n\n###", dataset_name, "\n\n")
-  
-  # dataset dimensions
-  cat("Number of rows:", nrow(dataset), "\n\n")
-  cat("Number of columns:", ncol(dataset), "\n\n")
-  
-  # variable names and data types
-  variable_info <- data.frame(
-    Variable = names(dataset),
-    Data_Type = sapply(dataset, function(x) class(x)[1]),
-    Missing_Values = sapply(dataset, function(x) sum(is.na(x)))
-  )
-  # print output
-  print(
-    knitr::kable(
-      variable_info,
-      caption = paste("Variables and data types:", dataset_name)
-    )
-  )
+for (name in names(datasets)) {
+  data <- datasets[[name]]
+  cat("\n\n##", name, "\n")
+
+  # dimensions
+  cat("Rows:", nrow(data), "\n")
+  cat("Columns:", ncol(data), "\n\n")
+
+  # variable types
+  cat("Variable types:\n")
+  cat("Numeric:", sum(sapply(data, is.numeric)), "\n")
+  cat("Character:", sum(sapply(data, is.character)), "\n")
+  cat("Integer:", sum(sapply(data, is.integer)), "\n")
+
+  # missing values
+  cat("\nTotal missing values:", sum(is.na(data)), "\n")
 }
 ```
 
@@ -335,6 +329,6 @@ Merged_data |>
   filter(Year %in% 2000:2015, Country.Name %in% c("France","Germany","United States", "Spain")) |> 
   ggplot(aes(x=Year,y= debt_GDP_ratio_HH, colour = Country.Name))+
   geom_line()+
-  scale_x_continuous(breaks = seq(2000,2015, by=1))
+  scale_x_continuous(breaks = seq(2000,2015, by=2))
 ```
 
