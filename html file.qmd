@@ -13,6 +13,8 @@ here::i_am("Data-management-project-Saihou-kate.Rproj")
 library(dplyr)
 library(tidyr)
 library(ggplot2)
+library(purrr)
+library(knitr)
 
 # Import datasets
 credit <- read.csv(
@@ -61,25 +63,30 @@ datasets <- list(
   "Unemployment Rate" = Unemployment_rate
 )
 
-# description for each dataset
-for (name in names(datasets)) {
+# create combined summary table
+dataset_summary <- purrr::map_dfr(names(datasets), function(name) {
+
   data <- datasets[[name]]
-  cat("\n\n##", name, "\n")
 
-  # dimensions
-  cat("Rows:", nrow(data), "\n")
-  cat("Columns:", ncol(data), "\n\n")
+  tibble(
+    Dataset = name,
+    Rows = nrow(data),
+    Columns = ncol(data),
+    Numeric = sum(sapply(data, is.numeric)),
+    Character = sum(sapply(data, is.character)),
+    Integer = sum(sapply(data, is.integer)),
+    Missing = sum(is.na(data))
+  )
+})
 
-  # variable types
-  cat("Variable types:\n")
-  cat("Numeric:", sum(sapply(data, is.numeric)), "\n")
-  cat("Character:", sum(sapply(data, is.character)), "\n")
-  cat("Integer:", sum(sapply(data, is.integer)), "\n")
-
-  # missing values
-  cat("\nTotal missing values:", sum(is.na(data)), "\n")
-}
+# display table
+knitr::kable(
+  dataset_summary,
+  caption = "Initial Dataset Statistics",
+  align = "lrrrrrr"
+)
 ```
+
 
 
 ## Transform GDP data
@@ -123,7 +130,7 @@ gdp_Growth_long <- GDP_Growth |>
 ## Transform Trade Openness data
 
 ```{r}
-Trade_Openness_long <- gdp |>
+Trade_Openness_long <- Trade_Openness |>
   pivot_longer(
     cols = starts_with("X"),
     names_to = "Year",
