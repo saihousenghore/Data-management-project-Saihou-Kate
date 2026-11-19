@@ -13,8 +13,6 @@ here::i_am("Data-management-project-Saihou-kate.Rproj")
 library(dplyr)
 library(tidyr)
 library(ggplot2)
-library(purrr)
-library(knitr)
 
 # Import datasets
 credit <- read.csv(
@@ -63,30 +61,25 @@ datasets <- list(
   "Unemployment Rate" = Unemployment_rate
 )
 
-# create combined summary table
-dataset_summary <- purrr::map_dfr(names(datasets), function(name) {
-
+# description for each dataset
+for (name in names(datasets)) {
   data <- datasets[[name]]
+  cat("\n\n##", name, "\n")
 
-  tibble(
-    Dataset = name,
-    Rows = nrow(data),
-    Columns = ncol(data),
-    Numeric = sum(sapply(data, is.numeric)),
-    Character = sum(sapply(data, is.character)),
-    Integer = sum(sapply(data, is.integer)),
-    Missing = sum(is.na(data))
-  )
-})
+  # dimensions
+  cat("Rows:", nrow(data), "\n")
+  cat("Columns:", ncol(data), "\n\n")
 
-# display table
-knitr::kable(
-  dataset_summary,
-  caption = "Initial Dataset Statistics",
-  align = "lrrrrrr"
-)
+  # variable types
+  cat("Variable types:\n")
+  cat("Numeric:", sum(sapply(data, is.numeric)), "\n")
+  cat("Character:", sum(sapply(data, is.character)), "\n")
+  cat("Integer:", sum(sapply(data, is.integer)), "\n")
+
+  # missing values
+  cat("\nTotal missing values:", sum(is.na(data)), "\n")
+}
 ```
-
 
 
 ## Transform GDP data
@@ -130,7 +123,7 @@ gdp_Growth_long <- GDP_Growth |>
 ## Transform Trade Openness data
 
 ```{r}
-Trade_Openness_long <- Trade_Openness |>
+Trade_Openness_long <- gdp |>
   pivot_longer(
     cols = starts_with("X"),
     names_to = "Year",
@@ -163,13 +156,13 @@ credit_HH_long <- credit_HH |>
   mutate(Year = sub("^X", "", Year))
 ```
 
-## Transform Umemployment data
+## Transform Unemployment data
 ```{r}
 Unemployment_long <- Unemployment_rate |>
   pivot_longer(
     cols = starts_with("X"),
     names_to = "Year",
-    values_to = "Umemployment_rate"
+    values_to = "Unemployment_rate"
   ) |>
   mutate(Year = sub("^X", "", Year))
 ```
@@ -243,7 +236,7 @@ Merged_data <- credit_annual |>
     by = c("Country.Name", "Year")
   ) |>
   inner_join(
-    Unemployment_long |> select(Country.Name, Year, Umemployment_rate),
+    Unemployment_long |> select(Country.Name, Year, Unemployment_rate),
     by = c("Country.Name", "Year")
   ) |>
   inner_join(
@@ -333,9 +326,59 @@ Merged_data |>
 ##  Evolution of household debt from 2000 to 2015
 ```{r}
 Merged_data |> 
-  filter(Year %in% 2000:2015, Country.Name %in% c("France","Germany","United States", "Spain")) |> 
+  filter(Year %in% 2000:2015, Country.Name %in% c("France","Germany","United States","Greece", "Italy", "Spain")) |> 
   ggplot(aes(x=Year,y= debt_GDP_ratio_HH, colour = Country.Name))+
   geom_line()+
   scale_x_continuous(breaks = seq(2000,2015, by=2))
 ```
+
+
+##  Evolution of GDP Growth before and after the crisis
+```{r}
+
+Merged_data |> 
+  filter(
+    Year %in% 2000:2015,
+    Country.Name %in% c("France", "Germany", "Greece", "Italy", "Spain")
+  ) |> 
+  mutate(period = factor(
+    ifelse(Year <= 2007, "Before 2008", "After 2008"),
+    levels = c("Before 2008", "After 2008")
+  )) |> 
+  ggplot(aes(x = Year, y = GDP_Growth, colour = Country.Name)) +
+  geom_line() +
+  scale_x_continuous(breaks = seq(2000, 2015, by = 2)) +
+  facet_wrap(vars(period), ncol = 2, scales = "free_x")
+```
+
+##  Evolution of Unemployment_rate from 2000 to 2015
+```{r}
+Merged_data |> 
+  filter(Year %in% 2000:2015, Country.Name %in% c("France","Germany","United States","Greece", "Italy", "Spain")) |> 
+  ggplot(aes(x=Year,y= Unemployment_rate, colour = Country.Name))+
+  geom_line()+
+  scale_x_continuous(breaks = seq(2000,2015, by=2))
+```
+
+## Distribution of Household Debt as a percentage of GDP across Five-Year Periods in the United States
+```{r}
+Merged_data |> 
+  filter(Year %in% 2000:2019 ,Country.Name== "United States") |> 
+  mutate(period = cut(
+    Year,
+    breaks = c(1999, 2004, 2009, 2014, 2019),
+    labels = c("2000–2004", "2005–2009",
+               "2010–2014", "2015–2019")
+  )) |> 
+  ggplot(aes(x = debt_GDP_ratio_HH)) +
+  geom_density(fill = "steelblue", alpha = 0.4, na.rm = TRUE) +
+  facet_wrap(vars(period), ncol = 2) +
+  labs(
+    x = "Household debt-to-GDP ratio",
+    y = "Density",
+    title = "Distribution of Household Debt as a percentage of GDP across Five-Year Periods"
+  )
+```
+
+
 
