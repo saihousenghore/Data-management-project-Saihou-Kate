@@ -8,12 +8,17 @@ format: html
 ```{r}
 #| echo: false
 
+# packages, preamble
 here::i_am("Data-management-project-Saihou-kate.Rproj")
 
 library(dplyr)
 library(tidyr)
 library(ggplot2)
+library(purrr)
+library(knitr)
+```
 
+```{r}
 # Import datasets
 credit <- read.csv(
   "Total credit to the non-financial sector.csv",
@@ -50,6 +55,7 @@ Unemployment_rate <- read.csv(
 
 ## Initial dataset inspection
 ```{r}
+```{r}
 # storing unedited datasets in list
 datasets <- list(
   "Total credit to non-financial sector" = credit,
@@ -61,24 +67,28 @@ datasets <- list(
   "Unemployment Rate" = Unemployment_rate
 )
 
-# description for each dataset
-for (name in names(datasets)) {
+# creating combined summary table
+dataset_summary <- purrr::map_dfr(names(datasets), function(name) {
+
   data <- datasets[[name]]
-  cat("\n\n##", name, "\n")
 
-  # dimensions
-  cat("Rows:", nrow(data), "\n")
-  cat("Columns:", ncol(data), "\n\n")
+  tibble(
+    Dataset = name,
+    Rows = nrow(data),
+    Columns = ncol(data),
+    Numeric = sum(sapply(data, is.numeric)),
+    Character = sum(sapply(data, is.character)),
+    Integer = sum(sapply(data, is.integer)),
+    Missing = sum(is.na(data))
+  )
+})
 
-  # variable types
-  cat("Variable types:\n")
-  cat("Numeric:", sum(sapply(data, is.numeric)), "\n")
-  cat("Character:", sum(sapply(data, is.character)), "\n")
-  cat("Integer:", sum(sapply(data, is.integer)), "\n")
-
-  # missing values
-  cat("\nTotal missing values:", sum(is.na(data)), "\n")
-}
+# display table
+knitr::kable(
+  dataset_summary,
+  caption = "Initial Dataset Statistics",
+  align = "lrrrrrr"
+)
 ```
 
 
