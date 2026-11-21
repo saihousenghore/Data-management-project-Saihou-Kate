@@ -1,0 +1,625 @@
+---
+title: "Credit Expansion and the Subprime Crisis"
+author: "Saihou Senghore - Kate van Keulen"
+format: html
+df-print: kable
+---
+
+```{r}
+
+# packages, preamble
+here::i_am("Data-management-project-Saihou-kate.Rproj")
+
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+library(purrr)
+library(knitr)
+library(sandwich)
+library(lmtest)
+library(lubridate)
+```
+
+```{r}
+# Import datasets
+credit <- read.csv(
+  "Total credit to the non-financial sector.csv",
+  skip = 3
+)
+credit_HH<-read.csv("Total credit to households.csv",
+                    skip= 3)
+
+gdp <- read.csv(
+  "GDP (constant_ 2015 _US$).csv",
+  skip = 4
+)
+
+CPI <- read.csv(
+  "Consumer price index (2010 = 100).csv",
+  skip = 4
+)
+
+GDP_Growth <- read.csv(
+  "GDP growth (annual %).csv",
+  skip = 4
+)
+
+Trade_Openness <- read.csv(
+  "Trade-Percentage-GDP.csv",
+  skip = 4
+)
+
+Unemployment_rate <- read.csv(
+  "Unemployment, total (% of total labor force) (modeled ILO estimate).csv",
+  skip = 4
+)
+```
+
+## Initial dataset inspection
+
+```{r}
+# storing unedited datasets in list
+datasets <- list(
+  "Total credit to non-financial sector" = credit,
+  "Total credit to households" = credit_HH,
+  "GDP" = gdp,
+  "Consumer Price Index" = CPI,
+  "GDP Growth" = GDP_Growth,
+  "Trade Openness" = Trade_Openness,
+  "Unemployment Rate" = Unemployment_rate
+)
+
+# creating combined summary table
+dataset_summary <- purrr::map_dfr(names(datasets), function(name) {
+
+  data <- datasets[[name]]
+
+  tibble(
+    Dataset = name,
+    Rows = nrow(data),
+    Columns = ncol(data),
+    Numeric = sum(sapply(data, is.numeric)),
+    Character = sum(sapply(data, is.character)),
+    Integer = sum(sapply(data, is.integer)),
+    Missing = sum(is.na(data))
+  )
+})
+
+# display table
+knitr::kable(
+  dataset_summary,
+  caption = "Initial Dataset Inspection",
+  align = "lrrrrrr"
+)
+```
+
+## Transform GDP data
+
+```{r}
+
+gdp_long <- gdp |>
+  pivot_longer(
+    cols = starts_with("X"),
+    names_to = "Year",
+    values_to = "GDP"
+  ) |>
+  mutate(Year = as.integer(sub("^X", "", Year)))
+```
+
+## Transform CPI data
+
+```{r}
+CPI_long <- CPI |>
+  pivot_longer(
+    cols = starts_with("X"),
+    names_to = "Year",
+    values_to = "CPI"
+  ) |>
+  mutate(Year = as.integer(sub("^X", "", Year)))
+```
+
+## Transform GDP_growth data
+
+```{r}
+gdp_Growth_long <- GDP_Growth |>
+  pivot_longer(
+    cols = starts_with("X"),
+    names_to = "Year",
+    values_to = "GDP_Growth"
+  ) |>
+  mutate(Year = as.integer(sub("^X", "", Year)))
+```
+
+## Transform Trade Openness data
+
+```{r}
+Trade_Openness_long <- Trade_Openness |>
+  pivot_longer(
+    cols = starts_with("X"),
+    names_to = "Year",
+    values_to = "Trade_Openness"
+  ) |>
+  mutate(Year = as.integer(sub("^X", "", Year)))
+```
+
+## Transform credit data
+
+```{r}
+credit_long <- credit |>
+  pivot_longer(
+    cols = starts_with("X"),
+    names_to = "Year",
+    values_to = "debt_GDP_ratio"
+  ) |>
+  mutate(Year = sub("^X", "", Year))
+```
+
+## Transform credit_HH data
+
+```{r}
+credit_HH_long <- credit_HH |>
+  pivot_longer(
+    cols = starts_with("X"),
+    names_to = "Year",
+    values_to = "debt_GDP_ratio_HH"
+  ) |>
+  mutate(Year = sub("^X", "", Year))
+```
+
+## Transform Unemployment data
+
+```{r}
+Unemployment_long <- Unemployment_rate |>
+  pivot_longer(
+    cols = starts_with("X"),
+    names_to = "Year",
+    values_to = "Unemployment_rate"
+  ) |>
+  mutate(Year = sub("^X", "", Year))
+```
+
+## Selecting last-quarter entries for (household) credit data from the BIS dataset
+
+```{r}
+credit_annual <- credit_long %>% 
+  mutate(Date = as.Date(Year, format = "%Y.%m.%d")) %>% 
+  filter(quarter(Date) == 4) %>% 
+           mutate(Year = year(Date)) %>% 
+  select(-Date)
+
+credit_HH_annual <- credit_HH_long %>% 
+  mutate(Date = as.Date(Year, format = "%Y.%m.%d")) %>% 
+  filter(quarter(Date) == 4) %>% 
+           mutate(Year = year(Date)) %>% 
+  select(-Date)
+
+```
+
+## Rename country column
+
+```{r}
+credit_annual<-credit_annual |> 
+  rename(Country.Name= Borrowers..country)
+
+credit_HH_annual<-credit_HH_annual |> 
+  rename(Country.Name= Borrowers..country)
+```
+
+## Renaming countries to fit the World Bank convention
+```{r}
+credit_annual <- credit_annual |>
+  mutate(Country.Name = recode(Country.Name,
+    "Korea"         = "Korea, Rep.",
+    "Russia"        = "Russian Federation",
+    "Hong Kong SAR" = "Hong Kong SAR, China",
+    "Turkey"        = "Turkiye",
+    "Slovakia"      = "Slovak Republic"
+  ))
+
+credit_HH_annual <- credit_HH_annual |>
+  mutate(Country.Name = recode(Country.Name,
+    "Korea"         = "Korea, Rep.",
+    "Russia"        = "Russian Federation",
+    "Hong Kong SAR" = "Hong Kong SAR, China",
+    "Turkey"        = "Turkiye",
+    "Slovakia"      = "Slovak Republic"
+  ))
+```
+
+
+## Convert years to integers
+
+```{r}
+gdp_long <- gdp_long |>
+  mutate(Year = as.integer(Year))
+
+gdp_Growth_long <- gdp_Growth_long |>
+  mutate(Year = as.integer(Year))
+
+Trade_Openness_long <- Trade_Openness_long |>
+  mutate(Year = as.integer(Year))
+
+Unemployment_long <- Unemployment_long |>
+  mutate(Year = as.integer(Year))
+
+CPI_long <- CPI_long |>
+  mutate(Year = as.integer(Year))
+```
+
+## Merge GDP and credit data
+
+```{r}
+Merged_data <- credit_annual |>
+  inner_join(
+    gdp_long |> select(Country.Name, Year, GDP),
+    by = c("Country.Name", "Year")
+  ) |>
+  inner_join(credit_HH_annual |> select(Country.Name, Year, debt_GDP_ratio_HH),
+    by = c("Country.Name", "Year")
+  ) |>
+  inner_join(
+    gdp_Growth_long |> select(Country.Name, Year, GDP_Growth),
+    by = c("Country.Name", "Year")
+  ) |>
+  inner_join(
+    Trade_Openness_long |> select(Country.Name, Year, Trade_Openness),
+    by = c("Country.Name", "Year")
+  ) |>
+  inner_join(
+    Unemployment_long |> select(Country.Name, Year, Unemployment_rate),
+    by = c("Country.Name", "Year")
+  ) |>
+  inner_join(
+    CPI_long |> select(Country.Name, Year, CPI),
+    by = c("Country.Name", "Year")
+  )
+```
+
+## Merged dataset inspection
+
+```{r}
+# variables to summarise, with readable labels
+vars <- c(
+  "Total credit (% of GDP)"     = "debt_GDP_ratio",
+  "Household credit (% of GDP)" = "debt_GDP_ratio_HH",
+  "GDP (constant 2015 US$, bn)" = "GDP",
+  "GDP growth (%)"              = "GDP_Growth",
+  "Trade openness (% of GDP)"   = "Trade_Openness",
+  "Unemployment rate (%)"       = "Unemployment_rate",
+  "CPI (2010 = 100)"            = "CPI"
+)
+
+# keeping observations from 1990 onwards
+summary_data <- Merged_data |>
+  filter(Year >= 1990)
+
+# creating summary statistics table
+merged_summary <- purrr::map_dfr(names(vars), function(label) {
+
+  x <- as.numeric(summary_data[[vars[[label]]]])
+
+  # express GDP in billions so the numbers stay readable
+  if (vars[[label]] == "GDP") x <- x / 1e9
+
+  tibble(
+    Variable = label,
+    N = sum(!is.na(x)),
+    Missing = sum(is.na(x)),
+    Mean = mean(x, na.rm = TRUE),
+    SD = sd(x, na.rm = TRUE),
+    Min = min(x, na.rm = TRUE),
+    Median = median(x, na.rm = TRUE),
+    Max = max(x, na.rm = TRUE)
+  )
+})
+
+# display table
+knitr::kable(
+  merged_summary,
+  caption = paste0(
+    "Merged Dataset Summary Statistics (",
+    nrow(summary_data), " observations, ",
+    n_distinct(summary_data$Country.Name), " countries, ",
+    min(summary_data$Year), "–", max(summary_data$Year), ")"
+  ),
+  digits = 2,
+  align = "lrrrrrrr",
+  format.args = list(big.mark = ",", scientific = FALSE)
+)
+```
+
+## Test correlation
+
+```{r}
+Merged_data |>
+  filter(Year == 2011) |>
+  summarise(
+    correlation = cor(GDP_Growth,
+      debt_GDP_ratio,
+      use = "complete.obs"
+    )
+  )
+
+Merged_data |>
+  filter(Year == 2011) |>
+  summarise(
+    correlation = cor(GDP_Growth,
+      debt_GDP_ratio_HH,
+      use = "complete.obs"
+    )
+  )
+
+```
+
+```{r}
+Cor_table<-Merged_data |> 
+  filter(Year %in% 2000:2015) |>
+  group_by(Year) |> 
+  summarise(correlation = cor(GDP_Growth,debt_GDP_ratio, use = "complete.obs"))
+
+Cor_table
+
+```
+
+## Household debt correlation with GDP growth
+
+```{r}
+Cor_table<-Merged_data |> 
+  filter(Year %in% 2000:2015) |>
+  group_by(Year) |> 
+  summarise(correlation_HH = cor(GDP_Growth,debt_GDP_ratio_HH, use = "complete.obs"),
+            correlation_non_fin_sec = cor(GDP_Growth,debt_GDP_ratio, use = "complete.obs"))
+
+Cor_table
+
+```
+
+## Correlation graph
+
+```{r}
+Merged_data |> 
+  filter(Year == 2011) |> 
+  ggplot(aes(x=GDP_Growth, y = debt_GDP_ratio))+
+  geom_point()+
+  geom_smooth(method = "lm", se = FALSE)
+
+Merged_data |> 
+  filter(Year == 2011) |> 
+  ggplot(aes(x=GDP_Growth, y = debt_GDP_ratio_HH))+
+  geom_point()+
+  geom_smooth(method = "lm", se = FALSE)
+
+```
+
+## Evolution of household debt from 2000 to 2015
+
+```{r}
+Merged_data |> 
+  filter(Year %in% 2000:2015, Country.Name %in% c("France","Germany","United States","Greece", "Italy", "Spain", "Ireland")) |> 
+  ggplot(aes(x=Year,y= debt_GDP_ratio_HH, colour = Country.Name))+
+  geom_line()+
+  scale_x_continuous(breaks = seq(2000,2015, by=2))
+```
+
+## Evolution of GDP Growth before and after the crisis
+
+```{r}
+
+Merged_data |> 
+  filter(
+    Year %in% 2000:2015,
+    Country.Name %in% c("France", "Germany", "Greece", "Italy", "Spain", "Ireland")
+  ) |> 
+  mutate(period = factor(
+    ifelse(Year <= 2007, "Before 2008", "After 2008"),
+    levels = c("Before 2008", "After 2008")
+  )) |> 
+  ggplot(aes(x = Year, y = GDP_Growth, colour = Country.Name)) +
+  geom_line() +
+  scale_x_continuous(breaks = seq(2000, 2015, by = 2)) +
+  facet_wrap(vars(period), ncol = 2, scales = "free_x")
+```
+
+## Evolution of the unemployment rate from 2000 to 2015
+
+```{r}
+Merged_data |> 
+  filter(Year %in% 2000:2015, Country.Name %in% c("France","Germany","United States","Greece", "Italy", "Spain", "Ireland")) |> 
+  ggplot(aes(x=Year,y= Unemployment_rate, colour = Country.Name))+
+  geom_line()+
+  scale_x_continuous(breaks = seq(2000,2015, by=2))
+```
+
+## Distribution of Household Debt as a percentage of GDP across Five-Year Periods in the United States
+
+```{r}
+Merged_data |> 
+  filter(Year %in% 2000:2019 ,Country.Name== "United States") |> 
+  mutate(period = cut(
+    Year,
+    breaks = c(1999, 2004, 2009, 2014, 2019),
+    labels = c("2000–2004", "2005–2009",
+               "2010–2014", "2015–2019")
+  )) |> 
+  ggplot(aes(x = debt_GDP_ratio_HH)) +
+  geom_density(fill = "steelblue", alpha = 0.4, na.rm = TRUE) +
+  facet_wrap(vars(period), ncol = 2) +
+  labs(
+    x = "Household debt-to-GDP ratio",
+    y = "Density",
+    title = "Distribution of Household Debt as a percentage of GDP across Five-Year Periods"
+  )
+```
+
+
+## Preparing the regression dataset
+
+The dataset is restricted to the period 2004–2014 and observations are grouped by country. This allows us to construct a cross-country dataset in which each country contributes one observation to the regression.
+
+Three alternative measures of pre-crisis household credit are considered: the change in the household credit-to-GDP ratio between 2004 and 2006, its average level over the same period, and its change between 2004 and 2007.
+
+Macroeconomic control variables (CPI, trade openness and unemployment) are measured using their average values over 2004–2006. Two alternative measures of post-crisis economic performance are also constructed: GDP growth in 2012 and average GDP growth between 2010 and 2014.
+
+```{r}
+regression_data <- Merged_data |>
+  filter(Year %in% 2004:2014) |>
+  group_by(Country.Name) |>
+  summarise(
+
+    # Credit expansion: 2004-2006
+    credit_expansion_0406 =
+      debt_GDP_ratio_HH[Year == 2006][1] -
+      debt_GDP_ratio_HH[Year == 2004][1],
+
+    # Average household credit: 2004-2006
+    credit_precrisis = mean(
+      debt_GDP_ratio_HH[Year %in% 2004:2006],
+      na.rm = TRUE
+    ),
+
+    # Credit expansion: 2004-2007
+    credit_expansion_0407 =
+      debt_GDP_ratio_HH[Year == 2007][1] -
+      debt_GDP_ratio_HH[Year == 2004][1],
+
+    # Pre-crisis controls
+    CPI_precrisis = mean(
+      CPI[Year %in% 2004:2006],
+      na.rm = TRUE
+    ),
+
+    Trade_precrisis = mean(
+      Trade_Openness[Year %in% 2004:2006],
+      na.rm = TRUE
+    ),
+
+    Unemployment_precrisis = mean(
+      Unemployment_rate[Year %in% 2004:2006],
+      na.rm = TRUE
+    ),
+
+    # GDP growth in 2012
+    growth_2012 = GDP_Growth[Year == 2012][1],
+
+    # Average GDP growth: 2010-2014
+    growth_2010_2014 = mean(
+      GDP_Growth[Year %in% 2010:2014],
+      na.rm = TRUE
+    ),
+
+    .groups = "drop"
+  ) |>
+  mutate(
+    across(
+      where(is.numeric),
+      ~ replace(.x, is.nan(.x), NA)
+    )
+  )
+```
+
+## Model 1: Credit expansion between 2004 and 2006
+
+The first specification examines whether the expansion of household credit between 2004 and 2006 is associated with GDP growth in 2012. This measures the relationship between pre-crisis credit expansion and medium-term post-crisis economic performance.
+
+```{r}
+model1 <- lm(
+  growth_2012 ~ credit_expansion_0406 +
+    CPI_precrisis + Trade_precrisis +
+    Unemployment_precrisis,
+  data = regression_data
+)
+```
+
+## Model 2: Average pre-crisis household credit
+
+The second specification examines whether the average household credit-to-GDP ratio between 2004 and 2006 is associated with average GDP growth between 2010 and 2014. Unlike Model 1, which measures credit expansion, this specification captures the initial level of household indebtedness.
+
+```{r}
+model2 <- lm(
+  growth_2010_2014 ~ credit_precrisis +
+    CPI_precrisis + Trade_precrisis +
+    Unemployment_precrisis,
+  data = regression_data
+)
+```
+
+## Model 3: Extending the credit expansion period to 2007
+
+This specification extends the measurement of credit expansion to 2007. The objective is to assess whether the results are sensitive to the choice of the pre-crisis period. GDP growth in 2012 remains the dependent variable, allowing comparison with Model 1.
+
+```{r}
+model3 <- lm(
+  growth_2012 ~ credit_expansion_0407 +
+    CPI_precrisis + Trade_precrisis +
+    Unemployment_precrisis,
+  data = regression_data
+)
+```
+
+## Model 4: Average post-crisis GDP growth
+
+This specification uses average GDP growth between 2010 and 2014 instead of GDP growth in a single year. It examines whether the relationship between pre-crisis credit expansion and economic performance persists over a longer recovery period.
+
+```{r}
+model4 <- lm(
+  growth_2010_2014 ~ credit_expansion_0407 +
+    CPI_precrisis + Trade_precrisis +
+    Unemployment_precrisis,
+  data = regression_data
+)
+```
+
+
+## Estimation using heteroskedasticity-robust standard errors
+
+```{r}
+models <- list(
+  model1 = model1,
+  model2 = model2,
+  model3 = model3,
+  model4 = model4
+)
+
+for (i in seq_along(models)) {
+  cat("\n", names(models)[i], "\n")
+  print(
+    coeftest(
+      models[[i]],
+      vcov = vcovHC(models[[i]], type = "HC1")
+    )
+  )
+}
+```
+
+## Comparing model fit
+
+Finally, the four specifications are compared using their number of observations, R-squared and adjusted R-squared. This provides an overview of the explanatory power of each model and makes it possible to assess whether changes in the credit measure or the dependent variable affect the overall model fit.
+
+```{r}
+comparison <- data.frame(
+  Model = names(models),
+  Observations = sapply(models, nobs),
+  R_squared = sapply(
+    models, \(x) summary(x)$r.squared
+  ),
+  Adjusted_R2 = sapply(
+    models, \(x) summary(x)$adj.r.squared
+  )
+)
+
+print(comparison)
+```
+
+## Comments on the regression results
+**Model 1:** Credit expansion between 2004 and 2006 is negatively and statistically significantly associated with GDP growth in 2012 (coefficient = −0.265, p = 0.004). This suggests that countries experiencing stronger household credit expansion before the crisis tended to record lower GDP growth in 2012. CPI is also negative and significant at the 1% level, while unemployment is marginally significant at the 10% level. Trade openness is not statistically significant.
+
+**Model 2:** Average household credit over 2004–2006 has a negative coefficient (−0.0287), significant at the 10% level (p = 0.090). This provides weaker evidence of a negative association between pre-crisis credit levels and average GDP growth over 2010–2014. CPI and unemployment are also marginally significant at the 10% level. Trade openness is not significant.
+
+**Model 3:** The negative relationship between credit expansion and subsequent GDP growth remains statistically significant when the credit expansion period is extended to 2004–2007 (coefficient = −0.191, p = 0.004). CPI is also negative and significant at the 1% level, while unemployment is marginally significant at the 10% level. This supports the robustness of the negative association found in Model 1.
+
+**Model 4:** Credit expansion between 2004 and 2007 remains negatively associated with average GDP growth over 2010–2014 (coefficient = −0.135, p = 0.039). CPI is also negative and statistically significant at the 1% level. However, trade openness and unemployment are not statistically significant.
+
+## Overall interpretation
+Across Models 1, 2, 3 and 4, the coefficient on pre-crisis household credit is consistently negative and statistically significant (at the 10% level or better). This suggests that countries experiencing stronger household credit expansion before the financial crisis tended to perform less favourably in the subsequent recovery period. The result is robust to changes in the credit measurement period and the post-crisis growth outcome.
+
+However, these regressions identify associations rather than causal effects. Other omitted country characteristics may also explain differences in post-crisis economic performance, more rigorous methods will be used in the the later stages of the project to better understand this relation and see if can identify causality.
