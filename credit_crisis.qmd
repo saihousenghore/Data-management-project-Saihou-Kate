@@ -5,6 +5,20 @@ format: html
 df-print: kable
 ---
 
+GitHub repository:<https://github.com/saihousenghore/Data-management-project-Saihou-Kate>
+
+The 2007-2009 global financial crisis was the most severe economic disruption since the Great Depression, yet its consequences were far from uniform across countries. Some economies suffered deep contractions and took a few years to regain their pre-crisis output levels, while others experienced comparatively mild downturns and recovered a lot quicker. This divergence is not easily explained by the magnitude of the initial financial shock alone, nor by the scale of the policy response deployed. What determined which economies absorbed the shock and which were overwhelmed by it? In this study we propose that a major determinant of crisis severity (which we measured by the depth of the contraction, the time taken to regain pre-crisis output, post-crisis growth and unemployment, the difference between the forecasted and actual GDP after the crises) is the scale of private-sector credit expansion in the years preceding the crisis. Therefore, we address the following research question: did the pace of pre-crisis private-sector credit expansion, measured before 2007, determine the severity of the subsequent economic contraction across countries? The central hypothesis is that rapid credit growth, particularly in household and non-financial corporate borrowing, increased financial vulnerabilities and amplified the economic consequences of the crisis. The empirical foundations for this inquiry are well established. Jorda, Schularick and Taylor (2016), using disaggregated bank credit data for advanced economies since 1870, show that credit-intensive expansions centered on mortgage lending are typically followed by deeper recessions and slower recoveries. Mian and Sufi (2018) document a strong correlation between the pre-crisis increase in household debt-to-GDP and the subsequent rise in unemployment, both across US states and across countries. Chen, Mrkaic and Nabar (2019) find that economies with faster pre-crisis credit growth suffered larger output losses relative to pre-crisis trends a decade after the shock. Building on this literature, we construct a longitudinal country-level dataset combining BIS credit statistics with World Bank indicators, measuring severity through the depth of the contraction, the time taken to regain pre-crisis output, post-crisis growth and unemployment, the difference between the forecasted and actual GDP after the crises and a composite severity index.
+
+## Data sources
+
+This project combines data from two international institutions: the Bank for International Settlements (BIS) and the World Bank's World Development Indicators (WDI). Together, these sources provide information on private-sector credit and broader macroeconomic conditions across countries. The main variables of interest come from the BIS Total Credit statistics database. We use two datasets: total credit to the non-financial sector and total credit to households, both expressed as a percentage of GDP. The data are originally reported quarterly and capture different forms of private-sector borrowing. In particular, household credit is relevant for examining the build-up of financial vulnerabilities before the 2007-2009 global financial crisis. To account for differences in economic conditions, we include five indicators from the World Bank's WDI: GDP in constant 2015 US dollars, GDP growth, the Consumer Price Index (CPI) and unemployment. These variables capture economic output, annual economic performance, price developments and labour market conditions. Additionally, trade openness, is included as a percentage of GDP to account for differences in countries' integration into international trade.
+
+**Links to the data sources**
+
+World Bank - WDI <https://databank.worldbank.org/source/world-development-indicators>
+
+Bank for International Settlements BIS <https://data.bis.org/topics/TOTAL_CREDIT>
+
 ```{r}
 
 # packages, preamble
@@ -92,6 +106,10 @@ knitr::kable(
   align = "lrrrrrr"
 )
 ```
+
+Before merging, the project consists of seven separate datasets. The two BIS datasets have dimensions `r nrow(credit)` × `r ncol(credit)` and `r nrow(credit_HH)` × `r ncol(credit_HH)` respectively; the five macroeconomic datasets have `r nrow(gdp)` rows and `r ncol(gdp)` columns each. The original files are organised in wide format, with countries represented in rows and individual years or quarters in columns.
+
+An initial inspection reveals substantial missing data across the sources. The BIS datasets contain `r format(dataset_summary$Missing[1], big.mark = ",")` missing values for total credit and `r format(dataset_summary$Missing[2], big.mark = ",")` for household credit. Among the macroeconomic indicators, missing values range from `r format(min(dataset_summary$Missing[3:7]), big.mark = ",")` to `r format(max(dataset_summary$Missing[3:7]), big.mark = ",")`. These gaps reflect differences in historical data availability across countries.
 
 ## Transform GDP data
 
@@ -206,6 +224,7 @@ credit_HH_annual<-credit_HH_annual |>
 ```
 
 ## Renaming countries to fit the World Bank convention
+
 ```{r}
 credit_annual <- credit_annual |>
   mutate(Country.Name = recode(Country.Name,
@@ -225,7 +244,6 @@ credit_HH_annual <- credit_HH_annual |>
     "Slovakia"      = "Slovak Republic"
   ))
 ```
-
 
 ## Convert years to integers
 
@@ -328,6 +346,16 @@ knitr::kable(
 )
 ```
 
+## Data joining and cleaning
+
+To combine the datasets, all files are first reshaped into long format, with years held in rows rather than columns, creating a common country-year structure.
+
+The BIS credit series are quarterly, so they were collapsed to annual frequency by retaining the fourth quarter to represent the year. An average of the four quarters was not used because the series is a stock: each quarter already reports the outstanding level of credit rather than a flow to be averaged. The fourth-quarter value was chosen because the remaining data, taken from the World Bank, is reported annually.
+
+The BIS country column was renamed to match the World Bank convention (`Country.Name`), and BIS country names that differ from the World Bank spelling (e.g. "Korea" to "Korea, Rep.") were recoded so that no country is lost in the merge. Year variables were converted to integers in all tables. An inner join was then applied across all seven tables using country and year as identifiers, so that only country-year combinations present in every dataset are retained.
+
+The resulting dataset contains `r format(nrow(Merged_data), big.mark = ",")` observations, covering `r n_distinct(Merged_data$Country.Name)` countries and `r ncol(Merged_data)` variables: country, year, total credit-to-GDP ratio, household credit-to-GDP ratio, GDP, GDP growth, trade openness, unemployment and CPI. The available period ranges from `r min(Merged_data$Year)` to `r max(Merged_data$Year)`. Some missing observations remain after merging, particularly for total credit (`r format(sum(is.na(Merged_data$debt_GDP_ratio)), big.mark = ",")`), household credit (`r format(sum(is.na(Merged_data$debt_GDP_ratio_HH)), big.mark = ",")`) and unemployment (`r format(sum(is.na(Merged_data$Unemployment_rate)), big.mark = ",")`). Inner joins remove unmatched country-year combinations but do not automatically eliminate missing values within individual variables.
+
 ## Test correlation
 
 ```{r}
@@ -360,6 +388,8 @@ Cor_table<-Merged_data |>
 Cor_table
 
 ```
+
+As an initial exploration, we calculate annual cross-country correlations between GDP growth and the two credit indicators for 2000-2015. The results show predominantly negative relationships during the years surrounding the crisis. For instance, the correlation between GDP growth and total credit-to-GDP reached `r round(with(subset(Merged_data, Year == 2008), cor(GDP_Growth, debt_GDP_ratio, use = "complete.obs")), 2)` in 2008. These findings provide an initial indication of a relationship between indebtedness and economic performance. However, further analysis is needed to determine whether credit expansion before 2007 was actually predictive of the severity of the crisis across countries.
 
 ## Household debt correlation with GDP growth
 
@@ -450,7 +480,6 @@ Merged_data |>
     title = "Distribution of Household Debt as a percentage of GDP across Five-Year Periods"
   )
 ```
-
 
 ## Preparing the regression dataset
 
@@ -569,8 +598,9 @@ model4 <- lm(
 )
 ```
 
-
 ## Estimation using heteroskedasticity-robust standard errors
+
+Heteroskedasticity-robust (HC1) stanaard errors are used in all models because the variance of the error terms may not be constant across countries. Under heteroskedasticity, the OLS coefficients remain unbiased, but the usual standard errors mmay be biased, which can overstate t-statistics and lead to false conclusions about statistical significance.
 
 ```{r}
 models <- list(
@@ -593,7 +623,7 @@ for (i in seq_along(models)) {
 
 ## Comparing model fit
 
-Finally, the four specifications are compared using their number of observations, R-squared and adjusted R-squared. This provides an overview of the explanatory power of each model and makes it possible to assess whether changes in the credit measure or the dependent variable affect the overall model fit.
+Finally, the four specifications are compared using their number of observations, R-squared and adjusted R-squared (this is used to account for the number of obervations). This provides an overview of the explanatory power of each model and makes it possible to assess whether changes in the credit measure or the dependent variable affect the overall model fit.
 
 ```{r}
 comparison <- data.frame(
@@ -611,15 +641,25 @@ print(comparison)
 ```
 
 ## Comments on the regression results
-**Model 1:** Credit expansion between 2004 and 2006 is negatively and statistically significantly associated with GDP growth in 2012 (coefficient = −0.265, p = 0.004). This suggests that countries experiencing stronger household credit expansion before the crisis tended to record lower GDP growth in 2012. CPI is also negative and significant at the 1% level, while unemployment is marginally significant at the 10% level. Trade openness is not statistically significant.
 
-**Model 2:** Average household credit over 2004–2006 has a negative coefficient (−0.0287), significant at the 10% level (p = 0.090). This provides weaker evidence of a negative association between pre-crisis credit levels and average GDP growth over 2010–2014. CPI and unemployment are also marginally significant at the 10% level. Trade openness is not significant.
+**Model 1:** Credit expansion between 2004 and 2006 is negatively and statistically significantly associated with GDP growth in 2012 (coefficient = −0.268, p = 0.005). This suggests that countries experiencing stronger household credit expansion before the crisis tended to record lower GDP growth in 2012. CPI is also negative and significant at the 1% level, while unemployment is marginally significant at the 10% level. Trade openness is not statistically significant.
 
-**Model 3:** The negative relationship between credit expansion and subsequent GDP growth remains statistically significant when the credit expansion period is extended to 2004–2007 (coefficient = −0.191, p = 0.004). CPI is also negative and significant at the 1% level, while unemployment is marginally significant at the 10% level. This supports the robustness of the negative association found in Model 1.
+**Model 2:** Average household credit over 2004-2006 has a negative coefficient (−0.0264), significant at the 10% level (p = 0.160). This provides weaker evidence of a negative association between pre-crisis credit levels and average GDP growth over 2010–2014. CPI and unemployment are also marginally significant at the 10% level. Trade openness is not significant.
 
-**Model 4:** Credit expansion between 2004 and 2007 remains negatively associated with average GDP growth over 2010–2014 (coefficient = −0.135, p = 0.039). CPI is also negative and statistically significant at the 1% level. However, trade openness and unemployment are not statistically significant.
+**Model 3:** The negative relationship between credit expansion and subsequent GDP growth remains statistically significant when the credit expansion period is extended to 2004–2007 (coefficient = −0.189, p = 0.004). CPI is also negative and significant at the 1% level, while unemployment is marginally significant at the 10% level. This supports the robustness of the negative association found in Model 1.
+
+**Model 4:** Credit expansion between 2004 and 2007 remains negatively associated with average GDP growth over 2010–2014 (coefficient = −0.118, p = 0.044). CPI is also negative and statistically significant at the 1% level. However, trade openness and unemployment are not statistically significant.
 
 ## Overall interpretation
-Across Models 1, 2, 3 and 4, the coefficient on pre-crisis household credit is consistently negative and statistically significant (at the 10% level or better). This suggests that countries experiencing stronger household credit expansion before the financial crisis tended to perform less favourably in the subsequent recovery period. The result is robust to changes in the credit measurement period and the post-crisis growth outcome.
+
+Across Models 1, 3 and 4, the coefficient on pre-crisis household credit is consistently negative and statistically significant (at the 10% level or better). This suggests that countries experiencing stronger household credit expansion before the financial crisis tended to perform less favourably in the subsequent recovery period. The result is robust to changes in the credit measurement period and the post-crisis growth outcome.
 
 However, these regressions identify associations rather than causal effects. Other omitted country characteristics may also explain differences in post-crisis economic performance, more rigorous methods will be used in the the later stages of the project to better understand this relation and see if can identify causality.
+
+## References
+
+Jordà, Ò., Schularick, M., & Taylor, A. M. (2016). The great mortgaging: housing finance, crises and business cycles. Economic policy, 31(85), 107-152.
+
+Mian, A., & Sufi, A. (2018). Finance and business cycles: The credit-driven household demand channel. Journal of economic perspectives, 32(3), 31-58.
+
+Chen, M. W., Mrkaic, M. M., & Nabar, M. M. S. (2019). The global economic recovery 10 years after the 2008 financial crisis. International Monetary Fund.
