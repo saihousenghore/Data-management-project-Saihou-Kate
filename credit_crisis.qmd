@@ -293,6 +293,19 @@ Merged_data <- credit_annual |>
   )
 ```
 
+The merged dataset contains the following variables:
+
+- **`Country.Name`**: country name, harmonised to the World Bank naming convention. Together with `Year`, it identifies each observation.
+- **`Year`**: calendar year of the observation. For the BIS credit series, it corresponds to the fourth-quarter value of that year.
+- **`debt_GDP_ratio`**: total credit to the non-financial sector (households and non-financial corporations), as a percentage of GDP. It measures the overall private-sector debt burden relative to the size the economy.
+- **`debt_GDP_ratio_HH`**: total credit to households, as a percentage of GDP. This is our main explanatory variable, since household borrowing, largely mortgage debt, is central to the build-up of vulnerabilities before 2008.
+- **`GDP`**: gross domestic product in constant 2015 US dollars. Using constant prices removes the effect of inflation, so changes reflect real output.
+- **`GDP_Growth`**: annual percentage growth of real GDP. This is our main outcome variable, used to measure the severity of the crisis and the strength of the recovery.
+- **`CPI`**: consumer price index (2010 = 100), measuring the general price level. It is used as a control for macroeconomic conditions before the crisis.
+- **`Trade_Openness`**: exports plus imports of goods and services, as a percentage of GDP. It controls for how exposed each economy is to international trade shocks.
+
+**`Unemployment_rate`**: unemployed people as a percentage of the total labour force (modeled ILO estimate). It captures labour market conditions and it can also reflect the severity.of the crisis.
+
 ## Merged dataset inspection
 
 ```{r}
